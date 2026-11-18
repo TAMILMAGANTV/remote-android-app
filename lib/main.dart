@@ -23,7 +23,6 @@ class _ConnectPageState extends State<ConnectPage> {
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _loadData();
   }
 
@@ -175,15 +174,12 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
-  bool _isLandscape = true;
+  double _fabY = 260;
 
   @override
   void initState() {
     super.initState();
-    // இணைத்தவுடன் Full Screen Landscape மோடிற்கு மாறும்
-    SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-
     channel = WebSocketChannel.connect(Uri.parse('$RELAY_URL/ws/client/${widget.hostId}/${widget.password}'));
     channel.stream.listen((msg) {
       final d = jsonDecode(msg);
@@ -194,24 +190,13 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     });
   }
 
-  void _toggleOrientation() {
-    setState(() => _isLandscape = !_isLandscape);
-    if (_isLandscape) {
-      SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-    } else {
-      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    }
-  }
-
-  // வெண்ணெய் போல ஸ்மூத்தான மவுஸ் நகர்வு (16ms = 60Hz Ultra Smooth)
   void _onMove(Offset pos) {
     if (_lastPos == null) { _lastPos = pos; return; }
     double rawDx = pos.dx - _lastPos!.dx;
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // மெதுவாக நகர்த்தினால் துல்லியமாகவும், வேகமாக நகர்த்தினால் தூரமாகவும் செல்லும் Acceleration
-    double accel = (rawDx.abs() + rawDy.abs()) > 8 ? 1.35 : 1.0;
+    double accel = (rawDx.abs() + rawDy.abs()) > 8 ? 1.4 : 1.0;
     _dx += rawDx * _speed * accel;
     _dy += rawDy * _speed * accel;
 
@@ -227,13 +212,8 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     final c = await Clipboard.getData(Clipboard.kTextPlain);
     if (c?.text != null && c!.text!.isNotEmpty) {
       _send({"type": "paste_text", "text": c.text});
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pasted!"), duration: Duration(seconds: 1)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Pasted to PC!"), duration: Duration(seconds: 1)));
     }
-  }
-
-  void _toggleSpeed() {
-    setState(() => _speed = _speed == 1.0 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.0));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mouse Speed: ${_speed}x"), duration: Duration(milliseconds: 500)));
   }
 
   void _showKeyboard() {
@@ -249,45 +229,69 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(44),
-        child: AppBar(
-          backgroundColor: Color(0xFF161B22),
-          title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 14)),
-          actions: [
-            IconButton(icon: Icon(Icons.screen_rotation, size: 20), tooltip: "Rotate Screen", onPressed: _toggleOrientation),
-            IconButton(icon: Icon(Icons.speed, size: 20), tooltip: "Mouse Speed", onPressed: _toggleSpeed),
-            IconButton(icon: Icon(Icons.content_paste, size: 20), tooltip: "Paste", onPressed: _pasteClipboard),
-            IconButton(icon: Icon(Icons.keyboard, size: 20), tooltip: "Keyboard", onPressed: _showKeyboard),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, size: 20),
-              onSelected: (v) {
-                if (v.startsWith("q_")) _send({"type": "quality", "level": v.substring(2)});
-                if (v == "win") _send({"type": "key", "key": "win"});
-                if (v == "tab") _send({"type": "hotkey", "keys": ["alt", "tab"]});
-                if (v == "rst") _send({"type": "power", "mode": "restart"});
-                if (v == "off") _send({"type": "power", "mode": "shutdown"});
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem(value: "q_low", child: Text("Quality: Low")),
-                PopupMenuItem(value: "q_medium", child: Text("Quality: Medium")),
-                PopupMenuItem(value: "q_hd", child: Text("Quality: HD")),
-                PopupMenuItem(value: "win", child: Text("Start Menu")),
-                PopupMenuItem(value: "tab", child: Text("Alt + Tab")),
-                PopupMenuItem(value: "rst", child: Text("Restart PC")),
-                PopupMenuItem(value: "off", child: Text("Shut Down PC")),
-              ],
-            ),
+  // AnyDesk Pie Menu (மிதக்கும் பட்டனை அழுத்தினால் திறக்கும் மெனு)
+  void _openAnyDeskMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Color(0xFF161B22),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceEvenly,
+          children: [
+            _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
+            _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
+            _menuBtn(Icons.speed, "Speed ${_speed}x", () {
+              setState(() => _speed = _speed == 1.0 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.0));
+              Navigator.pop(context);
+            }),
+            _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {
+              setState(() => _drag = !_drag);
+              _send({"type": _drag ? "mouse_down" : "mouse_up"});
+              Navigator.pop(context);
+            }),
+            _menuBtn(Icons.hd, "HD Quality", () { _send({"type": "quality", "level": "hd"}); Navigator.pop(context); }),
+            _menuBtn(Icons.flash_on, "Fast Low", () { _send({"type": "quality", "level": "low"}); Navigator.pop(context); }),
+            _menuBtn(Icons.window, "Start Menu", () { _send({"type": "key", "key": "win"}); Navigator.pop(context); }),
+            _menuBtn(Icons.tab, "Alt+Tab", () { _send({"type": "hotkey", "keys": ["alt", "tab"]}); Navigator.pop(context); }),
+            _menuBtn(Icons.keyboard_return, "Enter", () { _send({"type": "key", "key": "enter"}); Navigator.pop(context); }),
+            _menuBtn(Icons.backspace, "Backspace", () { _send({"type": "key", "key": "backspace"}); Navigator.pop(context); }),
+            _menuBtn(Icons.restart_alt, "Restart PC", () { _send({"type": "power", "mode": "restart"}); Navigator.pop(context); }),
+            _menuBtn(Icons.power_settings_new, "Disconnect", () { Navigator.pop(context); Navigator.pop(context); }, color: Colors.redAccent),
           ],
         ),
       ),
-      body: SafeArea(
+    );
+  }
+
+  Widget _menuBtn(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 78,
+        padding: EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(color: Color(0xFF0D1117), borderRadius: BorderRadius.circular(12)),
         child: Column(children: [
-          Expanded(
+          Icon(icon, color: color, size: 24),
+          SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: color), textAlign: TextAlign.center),
+        ]),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // 1. முழுத் திரை ஜூம் மற்றும் டச்பேட் பகுதி (AnyDesk Style)
+          Positioned.fill(
             child: frame == null
                 ? Center(child: Text(status, style: TextStyle(color: Colors.white, fontSize: 16)))
                 : Listener(
@@ -296,7 +300,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       if (_fingers == 1) { _lastPos = e.localPosition; _dx = 0; _dy = 0; }
                     },
                     onPointerMove: (e) {
-                      // 1 விரலால் நகர்த்தினால் ஜூம் செய்திருந்தாலும் மவுஸ் மட்டுமே நகரும்!
                       if (_fingers == 1) _onMove(e.localPosition);
                     },
                     onPointerUp: (_) {
@@ -308,55 +311,84 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       _lastPos = null;
                     },
                     child: InteractiveViewer(
-                      // 2 விரல்கள் வைக்கும்போது மட்டுமே ஜூம் & திரை நகர்வு (Pan) வேலை செய்யும்
                       panEnabled: _fingers >= 2,
                       scaleEnabled: true,
                       minScale: 1.0,
-                      maxScale: 5.0,
-                      child: SizedBox.expand(
+                      maxScale: 6.0,
+                      boundaryMargin: EdgeInsets.all(200),
+                      child: Container(
+                        width: size.width,
+                        height: size.height,
+                        alignment: Alignment.center,
                         child: GestureDetector(
                           onTap: () => _send({"type": "click"}),
                           onDoubleTap: () => _send({"type": "double_click"}),
-                          onLongPress: () => _send({"type": "right_click"}),
-                          child: Image.memory(frame!, gaplessPlayback: true, fit: BoxFit.fill),
+                          onLongPress: () {
+                            HapticFeedback.mediumImpact();
+                            _send({"type": "right_click"});
+                          },
+                          child: Image.memory(frame!, gaplessPlayback: true, fit: BoxFit.contain, width: size.width),
                         ),
                       ),
                     ),
                   ),
           ),
-          Container(
-            color: Color(0xFF161B22),
-            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                ElevatedButton(onPressed: () => _send({"type": "click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent), child: Text("Left Click")),
-                SizedBox(width: 6),
-                ElevatedButton(onPressed: () => _send({"type": "double_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text("Double Click")),
-                SizedBox(width: 6),
-                ElevatedButton(onPressed: () => _send({"type": "right_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange), child: Text("Right Click")),
-                SizedBox(width: 6),
-                ElevatedButton(
-                  onPressed: () { setState(() => _drag = !_drag); _send({"type": _drag ? "mouse_down" : "mouse_up"}); },
-                  style: ElevatedButton.styleFrom(backgroundColor: _drag ? Colors.amber : Colors.grey[800]),
-                  child: Text(_drag ? "Release" : "Drag Hold", style: TextStyle(color: _drag ? Colors.black : Colors.white)),
+
+          // 2. வலது ஓரத்தில் Scroll Bar (AnyDesk போல)
+          Positioned(
+            right: 4,
+            top: size.height * 0.35,
+            bottom: size.height * 0.35,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => _send({"type": "scroll", "amount": 350}),
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.keyboard_arrow_up, color: Colors.white70, size: 22),
+                  ),
                 ),
-                IconButton(icon: Icon(Icons.arrow_upward, size: 20), onPressed: () => _send({"type": "scroll", "amount": 300})),
-                IconButton(icon: Icon(Icons.arrow_downward, size: 20), onPressed: () => _send({"type": "scroll", "amount": -300})),
-                ElevatedButton(onPressed: () => _send({"type": "key", "key": "enter"}), child: Text("Enter")),
-                SizedBox(width: 6),
-                ElevatedButton(onPressed: () => _send({"type": "key", "key": "backspace"}), child: Text("Backspace")),
-              ]),
+                SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () => _send({"type": "scroll", "amount": -350}),
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 22),
+                  ),
+                ),
+              ],
             ),
           ),
-        ]),
+
+          // 3. இடது ஓரத்தில் மிதக்கும் AnyDesk Floating Button
+          Positioned(
+            left: 10,
+            top: _fabY,
+            child: GestureDetector(
+              onVerticalDragUpdate: (d) => setState(() => _fabY = (_fabY + d.delta.dy).clamp(40.0, size.height - 80)),
+              onTap: _openAnyDeskMenu,
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Color(0xFFEF4444).withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 8)],
+                ),
+                child: Icon(Icons.apps, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     channel.sink.close();
     super.dispose();

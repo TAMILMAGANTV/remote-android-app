@@ -86,9 +86,14 @@ class RemoteScreenPage extends StatefulWidget {
 class _RemoteScreenPageState extends State<RemoteScreenPage> {
   late WebSocketChannel channel;
   Uint8List? currentFrame;
-  String statusMessage = "கணினியுடன் இணைக்கிறது... (சில வினாடிகள் காத்திருக்கவும்)";
+  String statusMessage = "கணினியுடன் இணைக்கிறது...";
   final TextEditingController _textController = TextEditingController();
-  Offset? _lastTapPosition;
+  DateTime _lastMoveSent = DateTime.now();
+  bool _isZoomMode = false;
+
+  // விரலுக்கும் மவுஸ் கர்சருக்கும் இடையிலான இடைவெளி (Offset in pixels)
+  final double _cursorOffsetX = -25.0; // விரலுக்கு சற்று இடதுபுறம்
+  final double _cursorOffsetY = -45.0; // விரலுக்கு சற்று மேலே (விரல் மறைக்காமல் இருக்க)
 
   @override
   void initState() {
@@ -116,10 +121,22 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     });
   }
 
-  void _sendMouseAction(String action, Offset localPos, BoxConstraints constraints) {
-    double relX = localPos.dx / constraints.maxWidth;
-    double relY = localPos.dy / constraints.maxHeight;
-    channel.sink.add(jsonEncode({"type": action, "x": relX, "y": relY}));
+  void _sendMouseMove(Offset localPos, BoxConstraints constraints) {
+    if (DateTime.now().difference(_lastMoveSent).inMilliseconds < 45) return;
+    _lastMoveSent = DateTime.now();
+
+    // விரல் வைத்த இடத்திலிருந்து சற்று மேலே கர்சர் நகரும்படி கணக்கிடுதல்
+    double adjustedX = localPos.dx + _cursorOffsetX;
+    double adjustedY = localPos.dy + _cursorOffsetY;
+
+    double relX = (adjustedX / constraints.maxWidth).clamp(0.0, 1.0);
+    double relY = (adjustedY / constraints.maxHeight).clamp(0.0, 1.0);
+    channel.sink.add(jsonEncode({"type": "move", "x": relX, "y": relY}));
+  }
+
+  // கர்சர் இப்போது எந்த இடத்தில் நிற்கிறதோ, அங்கே கிளிக் செய்யும்
+  void _sendMouseActionAtCurrentPos(String action) {
+    channel.sink.add(jsonEncode({"type": action}));
   }
 
   void _sendScroll(int amount) {
@@ -155,8 +172,25 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("ID: ${widget.hostId}"),
+        title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 16)),
         actions: [
+          IconButton(
+            icon: Icon(_isZoomMode ? Icons.zoom_in : Icons.touch_app,
+                color: _isZoomMode ? Colors.amber : Colors.greenAccent),
+            onPressed: () {
+              setState(() {
+                _isZoomMode = !_isZoomMode;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_isZoomMode
+                      ? "Zoom Mode: இரண்டு விரல்களால் ஜூம் செய்யலாம்"
+                      : "Mouse Mode: விரலுக்கு மேலே கர்சர் நகரும்"),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
           IconButton(icon: Icon(Icons.keyboard), onPressed: _showKeyboardDialog),
         ],
       ),
@@ -167,28 +201,34 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
               child: currentFrame == null
                   ? Padding(
                       padding: const EdgeInsets.all(20.0),
-                      child: Text(statusMessage, textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 16)),
+                      child: Text(statusMessage,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 16)),
                     )
                   : InteractiveViewer(
+                      panEnabled: _isZoomMode,
+                      scaleEnabled: _isZoomMode,
                       maxScale: 5.0,
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return GestureDetector(
-                            onTapDown: (details) => _lastTapPosition = details.localPosition,
-                            onTap: () {
-                              if (_lastTapPosition != null) {
-                                _sendMouseAction("click", _lastTapPosition!, constraints);
-                              }
-                            },
-                            onDoubleTap: () {
-                              if (_lastTapPosition != null) {
-                                _sendMouseAction("double_click", _lastTapPosition!, constraints);
-                              }
-                            },
-                            onLongPressStart: (details) {
-                              _sendMouseAction("right_click", details.localPosition, constraints);
+                            // விரல் வைத்து நகர்த்தும்போது கர்சர் இடைவெளியுடன் நகரும்
+                            onPanStart: (details) =>
+                                _sendMouseMove(details.localPosition, constraints),
+                            onPanUpdate: (details) =>
+                                _sendMouseMove(details.localPosition, constraints),
+                            // திரையில் ஒருமுறை தட்டினால் கர்சர் இருக்கும் இடத்தில் Left Click
+                            onTap: () => _sendMouseActionAtCurrentPos("click"),
+                            // திரையில் இரண்டு முறை தட்டினால் கர்சர் இருக்கும் இடத்தில் Double Click (Open)
+                            onDoubleTap: () =>
+                                _sendMouseActionAtCurrentPos("double_click"),
+                            // நீண்ட நேரம் அழுத்தினால் Right Click
+                            onLongPress: () {
+                              _sendMouseActionAtCurrentPos("right_click");
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Right Click"), duration: Duration(milliseconds: 500)),
+                                SnackBar(
+                                    content: Text("Right Click"),
+                                    duration: Duration(milliseconds: 400)),
                               );
                             },
                             child: Image.memory(
@@ -202,29 +242,52 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                     ),
             ),
           ),
+          // கீழே உள்ள தனி மவுஸ் பட்டன்கள்
           Container(
             color: Colors.grey[900],
-            padding: EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.arrow_upward, color: Colors.white),
-                  onPressed: () => _sendScroll(300),
-                ),
-                IconButton(
-                  icon: Icon(Icons.arrow_downward, color: Colors.white),
-                  onPressed: () => _sendScroll(-300),
-                ),
-                ElevatedButton(
-                  onPressed: () => _sendKey("enter"),
-                  child: Text("Enter"),
-                ),
-                ElevatedButton(
-                  onPressed: () => _sendKey("backspace"),
-                  child: Text("Backspace"),
-                ),
-              ],
+            padding: EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _sendMouseActionAtCurrentPos("click"),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                    child: Text("Left Click"),
+                  ),
+                  SizedBox(width: 6),
+                  ElevatedButton(
+                    onPressed: () => _sendMouseActionAtCurrentPos("double_click"),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    child: Text("Double Click"),
+                  ),
+                  SizedBox(width: 6),
+                  ElevatedButton(
+                    onPressed: () => _sendMouseActionAtCurrentPos("right_click"),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
+                    child: Text("Right Click"),
+                  ),
+                  SizedBox(width: 6),
+                  IconButton(
+                    icon: Icon(Icons.arrow_upward, color: Colors.white),
+                    onPressed: () => _sendScroll(300),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.arrow_downward, color: Colors.white),
+                    onPressed: () => _sendScroll(-300),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => _sendKey("enter"),
+                    child: Text("Enter"),
+                  ),
+                  SizedBox(width: 6),
+                  ElevatedButton(
+                    onPressed: () => _sendKey("backspace"),
+                    child: Text("Backspace"),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

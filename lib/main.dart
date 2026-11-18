@@ -94,13 +94,6 @@ class _ConnectPageState extends State<ConnectPage> {
                             colors: [Color(0xFFEF4444), Color(0xFFB91C1C)],
                           ),
                           borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.redAccent.withOpacity(0.35),
-                              blurRadius: 12,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
                         ),
                         child: Icon(Icons.desktop_windows, color: Colors.white, size: 28),
                       ),
@@ -146,13 +139,6 @@ class _ConnectPageState extends State<ConnectPage> {
                   color: Color(0xFF161B22),
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 20,
-                      offset: Offset(0, 10),
-                    ),
-                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,33 +210,25 @@ class _ConnectPageState extends State<ConnectPage> {
                     ),
                     SizedBox(height: 24),
 
-                    Container(
+                    SizedBox(
                       width: double.infinity,
                       height: 54,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.redAccent.withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton.icon(
+                      child: ElevatedButton(
                         onPressed: _connect,
-                        icon: Icon(Icons.arrow_forward, color: Colors.white),
-                        label: Text(
-                          "Connect Now",
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
+                          backgroundColor: Color(0xFFEF4444),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "Connect Now",
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward, color: Colors.white),
+                          ],
                         ),
                       ),
                     ),
@@ -522,4 +500,21 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                 _sendKey("win");
               } else if (val == "alttab") {
                 _sendHotkey(["alt", "tab"]);
-        
+              } else if (val == "taskmgr") {
+                _sendHotkey(["ctrl", "shift", "esc"]);
+              } else if (val == "restart") {
+                _confirmPowerAction("restart", "Restart");
+              } else if (val == "shutdown") {
+                _confirmPowerAction("shutdown", "Shut Down");
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: "q_low", child: Text("Quality: Low (அதிக வேகம்)")),
+              PopupMenuItem(value: "q_medium", child: Text("Quality: Medium (சமநிலை)")),
+              PopupMenuItem(value: "q_hd", child: Text("Quality: HD (துல்லியம்)")),
+              PopupMenuDivider(),
+              PopupMenuItem(value: "win", child: Text("Windows Start Menu")),
+              PopupMenuItem(value: "alttab", child: Text("Switch Window (Alt + Tab)")),
+              PopupMenuItem(value: "taskmgr", child: Text("Task Manager")),
+              PopupMenuDivider(),
+       

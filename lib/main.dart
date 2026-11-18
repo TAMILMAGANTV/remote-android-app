@@ -7,11 +7,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const String RELAY_URL = "wss://remote-relay-server-v5am.onrender.com";
 
-void main() => runApp(MaterialApp(
+void main() {
+  runApp(
+    MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       home: ConnectPage(),
-    ));
+    ),
+  );
+}
 
 class ConnectPage extends StatefulWidget {
   @override
@@ -48,7 +52,7 @@ class _ConnectPageState extends State<ConnectPage> {
     if (cleanId.isEmpty || pass.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("தயவுசெய்து PC ID மற்றும் Password இரண்டையும் உள்ளிடவும்"),
+          content: Text("PC ID மற்றும் Password உள்ளிடவும்"),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -65,7 +69,10 @@ class _ConnectPageState extends State<ConnectPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => RemoteScreenPage(hostId: cleanId, password: pass),
+        builder: (context) => RemoteScreenPage(
+          hostId: cleanId,
+          password: pass,
+        ),
       ),
     );
   }
@@ -76,7 +83,7 @@ class _ConnectPageState extends State<ConnectPage> {
       backgroundColor: Color(0xFF0D1117),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 18.0),
+          padding: EdgeInsets.symmetric(horizontal: 22.0, vertical: 18.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -91,7 +98,11 @@ class _ConnectPageState extends State<ConnectPage> {
                           color: Color(0xFFEF4444),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(Icons.desktop_windows, color: Colors.white, size: 28),
+                        child: Icon(
+                          Icons.desktop_windows,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                       ),
                       SizedBox(width: 12),
                       Column(
@@ -99,11 +110,18 @@ class _ConnectPageState extends State<ConnectPage> {
                         children: [
                           Text(
                             "RemoteDesk Pro",
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                           Text(
                             "Fast & Secure Access",
-                            style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[400],
+                            ),
                           ),
                         ],
                       ),
@@ -120,15 +138,20 @@ class _ConnectPageState extends State<ConnectPage> {
                       children: [
                         Icon(Icons.circle, color: Colors.greenAccent, size: 8),
                         SizedBox(width: 6),
-                        Text("Ready", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text(
+                          "Ready",
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
-
               SizedBox(height: 28),
-
               Container(
                 padding: EdgeInsets.all(22),
                 decoration: BoxDecoration(
@@ -141,19 +164,29 @@ class _ConnectPageState extends State<ConnectPage> {
                   children: [
                     Text(
                       "Remote Control (கணினியை இணைக்க)",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     SizedBox(height: 6),
                     Text(
                       "உங்கள் கணினியில் தெரியும் 9 இலக்க ID மற்றும் கடவுச்சொல்லை உள்ளிடவும்",
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey[400]),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey[400],
+                      ),
                     ),
                     SizedBox(height: 22),
-
                     TextField(
                       controller: _idController,
                       keyboardType: TextInputType.number,
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: 1.5),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.5,
+                      ),
                       decoration: InputDecoration(
                         labelText: "Remote Desk ID",
                         hintText: "123 456 789",
@@ -173,11 +206,13 @@ class _ConnectPageState extends State<ConnectPage> {
                       ),
                     ),
                     SizedBox(height: 16),
-
                     TextField(
                       controller: _passController,
                       obscureText: _obscurePassword,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                       decoration: InputDecoration(
                         labelText: "Password (கடவுச்சொல்)",
                         prefixIcon: Icon(Icons.lock_outline, color: Colors.redAccent),
@@ -197,7 +232,6 @@ class _ConnectPageState extends State<ConnectPage> {
                       ),
                     ),
                     SizedBox(height: 24),
-
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -205,14 +239,20 @@ class _ConnectPageState extends State<ConnectPage> {
                         onPressed: _connect,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Color(0xFFEF4444),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               "Connect Now",
-                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                             SizedBox(width: 8),
                             Icon(Icons.arrow_forward, color: Colors.white),
@@ -223,13 +263,15 @@ class _ConnectPageState extends State<ConnectPage> {
                   ],
                 ),
               ),
-
               SizedBox(height: 26),
-
               if (_lastConnectedId.isNotEmpty) ...[
                 Text(
                   "Saved Workstation (சேமிக்கப்பட்ட கணினி)",
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey[300]),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[300],
+                  ),
                 ),
                 SizedBox(height: 12),
                 InkWell(
@@ -259,12 +301,20 @@ class _ConnectPageState extends State<ConnectPage> {
                             children: [
                               Text(
                                 "My Windows PC",
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                               SizedBox(height: 3),
                               Text(
                                 "ID: $_lastConnectedId",
-                                style: TextStyle(fontSize: 13, color: Colors.grey[400], letterSpacing: 1.0),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[400],
+                                  letterSpacing: 1.0,
+                                ),
                               ),
                             ],
                           ),
@@ -276,7 +326,6 @@ class _ConnectPageState extends State<ConnectPage> {
                 ),
                 SizedBox(height: 22),
               ],
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -304,7 +353,10 @@ class _ConnectPageState extends State<ConnectPage> {
           child: Icon(icon, color: Colors.grey[400], size: 20),
         ),
         SizedBox(height: 6),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+        ),
       ],
     );
   }
@@ -339,24 +391,27 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     String url = '$RELAY_URL/ws/client/${widget.hostId}/${widget.password}';
     channel = WebSocketChannel.connect(Uri.parse(url));
 
-    channel.stream.listen((message) {
-      final data = jsonDecode(message);
-      if (data['type'] == 'frame') {
-        setState(() {
-          currentFrame = base64Decode(data['image']);
-        });
-      } else if (data['type'] == 'error') {
-        setState(() {
-          statusMessage = data['message'];
-        });
-      }
-    }, onDone: () {
-      if (mounted) {
-        setState(() {
-          statusMessage = "இணைப்பு துண்டிக்கப்பட்டது";
-        });
-      }
-    });
+    channel.stream.listen(
+      (message) {
+        final data = jsonDecode(message);
+        if (data['type'] == 'frame') {
+          setState(() {
+            currentFrame = base64Decode(data['image']);
+          });
+        } else if (data['type'] == 'error') {
+          setState(() {
+            statusMessage = data['message'];
+          });
+        }
+      },
+      onDone: () {
+        if (mounted) {
+          setState(() {
+            statusMessage = "இணைப்பு துண்டிக்கப்பட்டது";
+          });
+        }
+      },
+    );
   }
 
   void _handleTouchMove(Offset currentPos) {
@@ -374,11 +429,13 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
 
     if (DateTime.now().difference(_lastSendTime).inMilliseconds >= 25) {
       if (_accumulatedDx.abs() >= 1.0 || _accumulatedDy.abs() >= 1.0) {
-        channel.sink.add(jsonEncode({
-          "type": "move_rel",
-          "dx": _accumulatedDx.round(),
-          "dy": _accumulatedDy.round(),
-        }));
+        channel.sink.add(
+          jsonEncode({
+            "type": "move_rel",
+            "dx": _accumulatedDx.round(),
+            "dy": _accumulatedDy.round(),
+          }),
+        );
         _accumulatedDx = 0.0;
         _accumulatedDy = 0.0;
         _lastSendTime = DateTime.now();
@@ -386,17 +443,31 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     }
   }
 
-  void _sendAction(String action) => channel.sink.add(jsonEncode({"type": action}));
-  void _sendScroll(int amount) => channel.sink.add(jsonEncode({"type": "scroll", "amount": amount}));
-  void _sendKey(String key) => channel.sink.add(jsonEncode({"type": "key", "key": key}));
-  void _sendHotkey(List<String> keys) => channel.sink.add(jsonEncode({"type": "hotkey", "keys": keys}));
+  void _sendAction(String action) {
+    channel.sink.add(jsonEncode({"type": action}));
+  }
+
+  void _sendScroll(int amount) {
+    channel.sink.add(jsonEncode({"type": "scroll", "amount": amount}));
+  }
+
+  void _sendKey(String key) {
+    channel.sink.add(jsonEncode({"type": "key", "key": key}));
+  }
+
+  void _sendHotkey(List<String> keys) {
+    channel.sink.add(jsonEncode({"type": "hotkey", "keys": keys}));
+  }
 
   Future<void> _pasteFromPhoneClipboard() async {
     ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data != null && data.text != null && data.text!.isNotEmpty) {
       channel.sink.add(jsonEncode({"type": "paste_text", "text": data.text}));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("கணினியில் Paste செய்யப்பட்டது!"), duration: Duration(seconds: 1)),
+        SnackBar(
+          content: Text("கணினியில் Paste செய்யப்பட்டது!"),
+          duration: Duration(seconds: 1),
+        ),
       );
     }
   }
@@ -411,9 +482,12 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
         _sensitivity = 1.2;
       }
     });
+    String label = _sensitivity == 1.2
+        ? "Slow"
+        : (_sensitivity == 1.8 ? "Normal" : "Fast");
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("Mouse Speed: ${_sensitivity == 1.2 ? 'Slow (துல்லியம்)' : _sensitivity == 1.8 ? 'Normal (சமநிலை)' : 'Fast (வேகம்)'}"),
+        content: Text("Mouse Speed: $label"),
         duration: Duration(milliseconds: 700),
       ),
     );
@@ -422,7 +496,10 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   void _changeQuality(String level) {
     channel.sink.add(jsonEncode({"type": "quality", "level": level}));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("திரைத் தரம்: ${level.toUpperCase()}"), duration: Duration(milliseconds: 600)),
+      SnackBar(
+        content: Text("திரைத் தரம்: ${level.toUpperCase()}"),
+        duration: Duration(milliseconds: 600),
+      ),
     );
   }
 
@@ -433,7 +510,10 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
         title: Text("உறுதிப்படுத்தவும்"),
         content: Text("உங்கள் கணினியை $label செய்ய வேண்டுமா?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("வேண்டாம்")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("வேண்டாம்"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
@@ -456,12 +536,14 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
         actions: [
           TextButton(
             onPressed: () {
-              channel.sink.add(jsonEncode({"type": "type", "text": _textController.text}));
+              channel.sink.add(
+                jsonEncode({"type": "type", "text": _textController.text}),
+              );
               _textController.clear();
               Navigator.pop(context);
             },
             child: Text("அனுப்பு"),
-          )
+          ),
         ],
       ),
     );
@@ -475,9 +557,21 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
         backgroundColor: Color(0xFF161B22),
         title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 15)),
         actions: [
-          IconButton(icon: Icon(Icons.speed), tooltip: "Mouse Speed", onPressed: _cycleSensitivity),
-          IconButton(icon: Icon(Icons.content_paste), tooltip: "Paste Text", onPressed: _pasteFromPhoneClipboard),
-          IconButton(icon: Icon(Icons.keyboard), tooltip: "Keyboard", onPressed: _showKeyboardDialog),
+          IconButton(
+            icon: Icon(Icons.speed),
+            tooltip: "Mouse Speed",
+            onPressed: _cycleSensitivity,
+          ),
+          IconButton(
+            icon: Icon(Icons.content_paste),
+            tooltip: "Paste Text",
+            onPressed: _pasteFromPhoneClipboard,
+          ),
+          IconButton(
+            icon: Icon(Icons.keyboard),
+            tooltip: "Keyboard",
+            onPressed: _showKeyboardDialog,
+          ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert),
             onSelected: (val) {
@@ -485,41 +579,4 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                 _changeQuality(val.substring(2));
               } else if (val == "win") {
                 _sendKey("win");
-              } else if (val == "alttab") {
-                _sendHotkey(["alt", "tab"]);
-              } else if (val == "taskmgr") {
-                _sendHotkey(["ctrl", "shift", "esc"]);
-              } else if (val == "restart") {
-                _confirmPowerAction("restart", "Restart");
-              } else if (val == "shutdown") {
-                _confirmPowerAction("shutdown", "Shut Down");
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(value: "q_low", child: Text("Quality: Low (அதிக வேகம்)")),
-              PopupMenuItem(value: "q_medium", child: Text("Quality: Medium (சமநிலை)")),
-              PopupMenuItem(value: "q_hd", child: Text("Quality: HD (துல்லியம்)")),
-              PopupMenuDivider(),
-              PopupMenuItem(value: "win", child: Text("Windows Start Menu")),
-              PopupMenuItem(value: "alttab", child: Text("Switch Window (Alt + Tab)")),
-              PopupMenuItem(value: "taskmgr", child: Text("Task Manager")),
-              PopupMenuDivider(),
-              PopupMenuItem(value: "restart", child: Text("Restart PC", style: TextStyle(color: Colors.orange))),
-              PopupMenuItem(value: "shutdown", child: Text("Shut Down PC", style: TextStyle(color: Colors.red))),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: currentFrame == null
-                  ? Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(color: Colors.redAccent),
-                          SizedBox(height: 16),
-                          Text(statusMessage
+              } els

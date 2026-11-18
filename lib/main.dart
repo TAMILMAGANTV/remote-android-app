@@ -210,41 +210,68 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     }
   }
 
+  // AnyDesk Magic: ஜூம் செய்தவுடன் அந்தப் பகுதியின் மையத்திற்கு மவுஸ் தானாகவே வந்துவிடும்!
+  void _syncCursorToZoomCenter(Size screenSize) {
+    final Matrix4 m = _zoomCtrl.value;
+    double scale = m.getMaxScaleOnAxis().clamp(1.0, 6.0);
+    if (scale <= 1.05) return;
+
+    double tx = m.storage[12];
+    double ty = m.storage[13];
+
+    // திரையின் மையப் புள்ளி கணினித் திரையில் எந்த இடத்தில் உள்ளது எனக் கணக்கிடுதல்
+    double canvasCenterX = (screenSize.width / 2 - tx) / scale;
+    double canvasCenterY = (screenSize.height / 2 - ty) / scale;
+
+    // 16:9 கணினித் திரைப் படத்தின் உயரம் மற்றும் மேல்/கீழ் இடைவெளி
+    double imgHeight = screenSize.width * (9.0 / 16.0);
+    double imgTop = (screenSize.height - imgHeight) / 2.0;
+
+    double normX = (canvasCenterX / screenSize.width).clamp(0.02, 0.98);
+    double normY = ((canvasCenterY - imgTop) / imgHeight).clamp(0.02, 0.98);
+
+    _send({"type": "move", "x": normX, "y": normY});
+  }
+
   void _onMove(Offset pos, Size screenSize) {
     if (_lastPos == null) { _lastPos = pos; return; }
     double rawDx = pos.dx - _lastPos!.dx;
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // 1. மவுஸ் நகர்வு (விரல் நகரும் அளவிற்கு ஏற்பத் துல்லியமாக)
+    // 1. மொத்தமாக ஓடாமல் விரல் நகரும் அளவிற்கு ஏற்பத் துல்லியமான மவுஸ் நகர்வு
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    double effectiveSpeed = currentScale > 1.2 ? (_speed / (currentScale * 0.7)) : _speed;
-    double moveX = rawDx * effectiveSpeed;
-    double moveY = rawDy * effectiveSpeed;
-
-    _dx += moveX;
-    _dy += moveY;
+    double effectiveSpeed = currentScale > 1.1 ? (_speed / (currentScale * 0.75)) : _speed;
+    _dx += rawDx * effectiveSpeed;
+    _dy += rawDy * effectiveSpeed;
 
     if (DateTime.now().difference(_lastTime).inMilliseconds >= 26 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // 2. Cursor-Follow Camera: விரல் எங்கிருந்தாலும், மவுஸ் நகரும் திசையில் ஜூம் செய்த திரையும் சேர்ந்து நகரும்!
+    // 2. விளிம்பிற்கு (Edge) விரல் செல்லும்போது மட்டுமே திரை மென்மையாக நகரும்
     if (currentScale > 1.05) {
-      final Matrix4 m = _zoomCtrl.value.clone();
-      double maxTx = 40.0;
-      double minTx = screenSize.width * (1 - currentScale) - 40.0;
-      double maxTy = 220.0;
-      double minTy = screenSize.height * (1 - currentScale) - 220.0;
+      double panX = 0, panY = 0;
+      const double edgeZone = 55.0;
 
-      // மவுஸ் நகரும் வேகத்திற்கு இணையாகத் திரையையும் நகர்த்துவதால் மவுஸ் எப்போதும் திரையின் உள்ளேயே தெரியும்
-      double camPanX = -rawDx * (currentScale - 1.0) * 0.55;
-      double camPanY = -rawDy * (currentScale - 1.0) * 0.55;
+      if (pos.dx < edgeZone && rawDx < 0) panX = -rawDx * 0.85;
+      else if (pos.dx > screenSize.width - edgeZone && rawDx > 0) panX = -rawDx * 0.85;
 
-      m.storage[12] = (m.storage[12] + camPanX).clamp(minTx, maxTx);
-      m.storage[13] = (m.storage[13] + camPanY).clamp(minTy, maxTy);
-      _zoomCtrl.value = m;
+      if (pos.dy < edgeZone && rawDy < 0) panY = -rawDy * 0.85;
+      else if (pos.dy > screenSize.height - edgeZone && rawDy > 0) panY = -rawDy * 0.85;
+
+      if (panX != 0 || panY != 0) {
+        final Matrix4 m = _zoomCtrl.value.clone();
+        double maxTx = 40.0;
+        double minTx = screenSize.width * (1 - currentScale) - 40.0;
+        double maxTy = 220.0;
+        double minTy = screenSize.height * (1 - currentScale) - 220.0;
+
+        m.storage[12] = (m.storage[12] + panX).clamp(minTx, maxTx);
+        m.storage[13] = (m.storage[13] + panY).clamp(minTy, maxTy);
+        _zoomCtrl.value = m;
+      }
     }
   }
 
@@ -373,7 +400,11 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       bool wasMulti = _fingers >= 2;
                       _fingers = (_fingers - 1).clamp(0, 10);
                       if (_fingers == 0) _lastPos = null;
-                      if (wasMulti && _fingers < 2) setState(() {});
+                      if (wasMulti && _fingers < 2) {
+                        setState(() {});
+                        // இரண்டு விரலால் ஜூம் செய்து முடித்தவுடன், அந்த இடத்திற்கு மவுஸ் தானாக வந்துவிடும்!
+                        _syncCursorToZoomCenter(size);
+                      }
                     },
                     onPointerCancel: (_) {
                       _fingers = 0;

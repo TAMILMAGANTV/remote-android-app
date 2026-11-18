@@ -216,39 +216,35 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // 1. கர்சர் மறையாமல் விரல் நுனியிலேயே துல்லியமாக நகரும் வேகம்
+    // 1. மவுஸ் நகர்வு (விரல் நகரும் அளவிற்கு ஏற்பத் துல்லியமாக)
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    double effectiveSpeed = currentScale > 1.2 ? (_speed / (currentScale * 0.65)) : _speed;
-    _dx += rawDx * effectiveSpeed;
-    _dy += rawDy * effectiveSpeed;
+    double effectiveSpeed = currentScale > 1.2 ? (_speed / (currentScale * 0.7)) : _speed;
+    double moveX = rawDx * effectiveSpeed;
+    double moveY = rawDy * effectiveSpeed;
+
+    _dx += moveX;
+    _dy += moveY;
 
     if (DateTime.now().difference(_lastTime).inMilliseconds >= 26 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // 2. விளிம்பிற்கு (Edge) மவுஸை நகர்த்தும்போது மட்டுமே ஜூம் திரை மென்மையாக நகரும்
+    // 2. Cursor-Follow Camera: விரல் எங்கிருந்தாலும், மவுஸ் நகரும் திசையில் ஜூம் செய்த திரையும் சேர்ந்து நகரும்!
     if (currentScale > 1.05) {
-      double panX = 0, panY = 0;
-      const double edgeZone = 65.0;
+      final Matrix4 m = _zoomCtrl.value.clone();
+      double maxTx = 40.0;
+      double minTx = screenSize.width * (1 - currentScale) - 40.0;
+      double maxTy = 220.0;
+      double minTy = screenSize.height * (1 - currentScale) - 220.0;
 
-      if (pos.dx < edgeZone && rawDx < 0) panX = -rawDx * 0.9;
-      else if (pos.dx > screenSize.width - edgeZone && rawDx > 0) panX = -rawDx * 0.9;
+      // மவுஸ் நகரும் வேகத்திற்கு இணையாகத் திரையையும் நகர்த்துவதால் மவுஸ் எப்போதும் திரையின் உள்ளேயே தெரியும்
+      double camPanX = -rawDx * (currentScale - 1.0) * 0.55;
+      double camPanY = -rawDy * (currentScale - 1.0) * 0.55;
 
-      if (pos.dy < edgeZone && rawDy < 0) panY = -rawDy * 0.9;
-      else if (pos.dy > screenSize.height - edgeZone && rawDy > 0) panY = -rawDy * 0.9;
-
-      if (panX != 0 || panY != 0) {
-        final Matrix4 m = _zoomCtrl.value.clone();
-        double maxTx = 40.0;
-        double minTx = screenSize.width * (1 - currentScale) - 40.0;
-        double maxTy = 220.0;
-        double minTy = screenSize.height * (1 - currentScale) - 220.0;
-
-        m.storage[12] = (m.storage[12] + panX).clamp(minTx, maxTx);
-        m.storage[13] = (m.storage[13] + panY).clamp(minTy, maxTy);
-        _zoomCtrl.value = m;
-      }
+      m.storage[12] = (m.storage[12] + camPanX).clamp(minTx, maxTx);
+      m.storage[13] = (m.storage[13] + camPanY).clamp(minTy, maxTy);
+      _zoomCtrl.value = m;
     }
   }
 
@@ -359,7 +355,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // முழுத் திரையும் (கருப்புப் பகுதி உட்பட) Touchpad ஆக வேலை செய்யும்
           Positioned.fill(
             child: frame == null
                 ? Center(child: Text(status, style: TextStyle(color: Colors.white, fontSize: 16)))

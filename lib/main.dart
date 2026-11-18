@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const String RELAY_URL = "wss://remote-relay-server-v5am.onrender.com";
 
@@ -20,10 +21,31 @@ class _ConnectPageState extends State<ConnectPage> {
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _passController = TextEditingController();
 
-  void _connect() {
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  // போனில் ஏற்கனவே சேமிக்கப்பட்ட ID & Password-ஐ எடுக்கும் பகுதி
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _idController.text = prefs.getString('saved_pc_id') ?? '';
+      _passController.text = prefs.getString('saved_pc_pass') ?? '';
+    });
+  }
+
+  // புதிய ID & Password-ஐ போனில் சேமித்துவிட்டு Connect செய்யும் பகுதி
+  Future<void> _connect() async {
     String cleanId = _idController.text.replaceAll(" ", "").trim();
     String pass = _passController.text.trim();
+
     if (cleanId.isNotEmpty && pass.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_pc_id', _idController.text.trim());
+      await prefs.setString('saved_pc_pass', pass);
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -91,9 +113,9 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   DateTime _lastMoveSent = DateTime.now();
   bool _isZoomMode = false;
 
-  // விரலுக்கும் மவுஸ் கர்சருக்கும் இடையிலான இடைவெளி (Offset in pixels)
-  final double _cursorOffsetX = -25.0; // விரலுக்கு சற்று இடதுபுறம்
-  final double _cursorOffsetY = -45.0; // விரலுக்கு சற்று மேலே (விரல் மறைக்காமல் இருக்க)
+  // விரலுக்கும் மவுஸ் கர்சருக்கும் இடையிலான இடைவெளி
+  final double _cursorOffsetX = -25.0;
+  final double _cursorOffsetY = -45.0;
 
   @override
   void initState() {
@@ -125,7 +147,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     if (DateTime.now().difference(_lastMoveSent).inMilliseconds < 45) return;
     _lastMoveSent = DateTime.now();
 
-    // விரல் வைத்த இடத்திலிருந்து சற்று மேலே கர்சர் நகரும்படி கணக்கிடுதல்
     double adjustedX = localPos.dx + _cursorOffsetX;
     double adjustedY = localPos.dy + _cursorOffsetY;
 
@@ -134,7 +155,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     channel.sink.add(jsonEncode({"type": "move", "x": relX, "y": relY}));
   }
 
-  // கர்சர் இப்போது எந்த இடத்தில் நிற்கிறதோ, அங்கே கிளிக் செய்யும்
   void _sendMouseActionAtCurrentPos(String action) {
     channel.sink.add(jsonEncode({"type": action}));
   }
@@ -212,17 +232,13 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return GestureDetector(
-                            // விரல் வைத்து நகர்த்தும்போது கர்சர் இடைவெளியுடன் நகரும்
                             onPanStart: (details) =>
                                 _sendMouseMove(details.localPosition, constraints),
                             onPanUpdate: (details) =>
                                 _sendMouseMove(details.localPosition, constraints),
-                            // திரையில் ஒருமுறை தட்டினால் கர்சர் இருக்கும் இடத்தில் Left Click
                             onTap: () => _sendMouseActionAtCurrentPos("click"),
-                            // திரையில் இரண்டு முறை தட்டினால் கர்சர் இருக்கும் இடத்தில் Double Click (Open)
                             onDoubleTap: () =>
                                 _sendMouseActionAtCurrentPos("double_click"),
-                            // நீண்ட நேரம் அழுத்தினால் Right Click
                             onLongPress: () {
                               _sendMouseActionAtCurrentPos("right_click");
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -242,7 +258,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                     ),
             ),
           ),
-          // கீழே உள்ள தனி மவுஸ் பட்டன்கள்
           Container(
             color: Colors.grey[900],
             padding: EdgeInsets.symmetric(vertical: 6, horizontal: 6),

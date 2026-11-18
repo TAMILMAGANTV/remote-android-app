@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 const String RELAY_URL = "wss://remote-relay-server-v5am.onrender.com";
 
@@ -119,7 +118,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   DateTime _lastMoveSent = DateTime.now();
   int _pointerCount = 0;
   bool _isDragging = false;
-  String _currentQuality = "medium";
+  final ImagePicker _picker = ImagePicker();
 
   final double _cursorOffsetX = -20.0;
   final double _cursorOffsetY = -45.0;
@@ -167,7 +166,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   void _sendKey(String key) => channel.sink.add(jsonEncode({"type": "key", "key": key}));
   void _sendHotkey(List<String> keys) => channel.sink.add(jsonEncode({"type": "hotkey", "keys": keys}));
 
-  // மொபைலில் காப்பி செய்த டெக்ஸ்டை நேரடியாக PC-ல் பேஸ்ட் செய்தல்
   Future<void> _pasteFromPhoneClipboard() async {
     ClipboardData? data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data != null && data.text != null && data.text!.isNotEmpty) {
@@ -182,13 +180,11 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     }
   }
 
-  // மொபைலில் இருந்து ஃபைல் தேர்ந்தெடுத்து கணினிக்கு அனுப்புதல்
-  Future<void> _pickAndSendFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      File file = File(result.files.single.path!);
-      String filename = result.files.single.name;
-      List<int> bytes = await file.readAsBytes();
+  Future<void> _pickAndSendMedia() async {
+    final XFile? file = await _picker.pickMedia();
+    if (file != null) {
+      String filename = file.name;
+      Uint8List bytes = await file.readAsBytes();
       if (bytes.length > 15 * 1024 * 1024) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("15MB-க்கு குறைவான ஃபைல்களை மட்டும் அனுப்பவும்")),
@@ -208,7 +204,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   }
 
   void _changeQuality(String level) {
-    setState(() => _currentQuality = level);
     channel.sink.add(jsonEncode({"type": "quality", "level": level}));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("திரைத் தரம்: ${level.toUpperCase()}"), duration: Duration(milliseconds: 600)),
@@ -263,7 +258,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       appBar: AppBar(
         title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 15)),
         actions: [
-          IconButton(icon: Icon(Icons.upload_file), tooltip: "Send File", onPressed: _pickAndSendFile),
+          IconButton(icon: Icon(Icons.upload_file), tooltip: "Send Media/File", onPressed: _pickAndSendMedia),
           IconButton(icon: Icon(Icons.content_paste), tooltip: "Paste Text", onPressed: _pasteFromPhoneClipboard),
           IconButton(icon: Icon(Icons.keyboard), tooltip: "Keyboard", onPressed: _showKeyboardDialog),
           PopupMenuButton<String>(

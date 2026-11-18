@@ -172,7 +172,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   final _txtCtrl = TextEditingController();
   final TransformationController _zoomCtrl = TransformationController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 2.0;
+  double _dx = 0, _dy = 0, _speed = 1.4;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
@@ -216,42 +216,32 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // 1. ஜூம் அளவிற்கு ஏற்ப மவுஸ் வேகத்தைத் துல்லியமாகச் சரிசெய்தல்
+    // 1. "சர்ரு சர்ரு" என ஓடாமல், விரல் நகரும் அளவிற்கு ஏற்ப 1:1 துல்லியமான வேகம்
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    double accel = (rawDx.abs() + rawDy.abs()) > 7 ? 1.35 : 1.0;
-    _dx += (rawDx * _speed * accel) / currentScale;
-    _dy += (rawDy * _speed * accel) / currentScale;
+    double effectiveSpeed = _speed / (currentScale > 1.2 ? (currentScale * 0.75) : 1.0);
+    _dx += rawDx * effectiveSpeed;
+    _dy += rawDy * effectiveSpeed;
 
-    if (DateTime.now().difference(_lastTime).inMilliseconds >= 28 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
+    if (DateTime.now().difference(_lastTime).inMilliseconds >= 30 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // 2. AnyDesk Auto-Pan: ஜூம் செய்திருக்கும்போது ஓரத்திற்கு மவுஸை நகர்த்தினால் திரை தானாக நகரும்!
+    // 2. AnyDesk Camera-Follow: ஜூம் செய்திருக்கும்போது மவுஸ் நகரும் திசையில் திரையும் சேர்ந்து ஸ்மூத்தாக நகரும்!
     if (currentScale > 1.05) {
-      double panX = 0, panY = 0;
-      const double edge = 55.0;
-      const double panStep = 14.0;
+      final Matrix4 m = _zoomCtrl.value.clone();
+      double maxTx = 40.0;
+      double minTx = screenSize.width * (1 - currentScale) - 40.0;
+      double maxTy = 220.0;
+      double minTy = screenSize.height * (1 - currentScale) - 220.0;
 
-      if (pos.dx < edge) panX = panStep;
-      else if (pos.dx > screenSize.width - edge) panX = -panStep;
+      // விரல் நகரும் திசைக்கு ஏற்பத் திரையை மென்மையாக நகர்த்தும் (Smooth Follow)
+      double followPanX = -rawDx * 0.65;
+      double followPanY = -rawDy * 0.65;
 
-      if (pos.dy < edge) panY = panStep;
-      else if (pos.dy > screenSize.height - edge) panY = -panStep;
-
-      if (panX != 0 || panY != 0) {
-        final Matrix4 m = _zoomCtrl.value.clone();
-        double maxTx = 80.0;
-        double minTx = screenSize.width * (1 - currentScale) - 80.0;
-        double maxTy = 180.0;
-        double minTy = screenSize.height * (1 - currentScale) - 180.0;
-
-        double nextTx = (m.storage[12] + panX).clamp(minTx, maxTx);
-        double nextTy = (m.storage[13] + panY).clamp(minTy, maxTy);
-        m.storage[12] = nextTx;
-        m.storage[13] = nextTy;
-        _zoomCtrl.value = m;
-      }
+      m.storage[12] = (m.storage[12] + followPanX).clamp(minTx, maxTx);
+      m.storage[13] = (m.storage[13] + followPanY).clamp(minTy, maxTy);
+      _zoomCtrl.value = m;
     }
   }
 
@@ -317,7 +307,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
             _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
             _menuBtn(Icons.speed, "Speed ${_speed}x", () {
-              setState(() => _speed = _speed == 1.4 ? 2.0 : (_speed == 2.0 ? 2.8 : 1.4));
+              setState(() => _speed = _speed == 1.0 ? 1.4 : (_speed == 1.4 ? 2.0 : 1.0));
               Navigator.pop(context);
             }),
             _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {
@@ -392,7 +382,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       scaleEnabled: true,
                       minScale: 1.0,
                       maxScale: 6.0,
-                      boundaryMargin: EdgeInsets.all(200),
+                      boundaryMargin: EdgeInsets.all(250),
                       child: Container(
                         width: size.width,
                         height: size.height,

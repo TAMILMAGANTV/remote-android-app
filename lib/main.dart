@@ -9,10 +9,7 @@ const String RELAY_URL = "wss://remote-relay-server-v5am.onrender.com";
 
 void main() => runApp(MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Color(0xFF0D1117),
-        primaryColor: Color(0xFFEF4444),
-      ),
+      theme: ThemeData.dark(),
       home: ConnectPage(),
     ));
 
@@ -76,6 +73,7 @@ class _ConnectPageState extends State<ConnectPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFF0D1117),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 18.0),
@@ -90,9 +88,7 @@ class _ConnectPageState extends State<ConnectPage> {
                       Container(
                         padding: EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFB91C1C)],
-                          ),
+                          color: Color(0xFFEF4444),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(Icons.desktop_windows, color: Colors.white, size: 28),
@@ -103,7 +99,7 @@ class _ConnectPageState extends State<ConnectPage> {
                         children: [
                           Text(
                             "RemoteDesk Pro",
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                           Text(
                             "Fast & Secure Access",
@@ -116,15 +112,15 @@ class _ConnectPageState extends State<ConnectPage> {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.15),
+                      color: Color(0xFF161B22),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                      border: Border.all(color: Colors.greenAccent),
                     ),
                     child: Row(
                       children: [
                         Icon(Icons.circle, color: Colors.greenAccent, size: 8),
                         SizedBox(width: 6),
-                        Text("Ready", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text("Ready", style: TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -138,7 +134,7 @@ class _ConnectPageState extends State<ConnectPage> {
                 decoration: BoxDecoration(
                   color: Color(0xFF161B22),
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: Colors.grey[800]!),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,10 +170,6 @@ class _ConnectPageState extends State<ConnectPage> {
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
-                        ),
                       ),
                     ),
                     SizedBox(height: 16),
@@ -201,10 +193,6 @@ class _ConnectPageState extends State<ConnectPage> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: Colors.redAccent, width: 1.5),
                         ),
                       ),
                     ),
@@ -252,14 +240,14 @@ class _ConnectPageState extends State<ConnectPage> {
                     decoration: BoxDecoration(
                       color: Color(0xFF161B22),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                      border: Border.all(color: Colors.grey[800]!),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withOpacity(0.15),
+                            color: Color(0xFF0D1117),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(Icons.laptop, color: Colors.blueAccent, size: 26),
@@ -312,7 +300,6 @@ class _ConnectPageState extends State<ConnectPage> {
           decoration: BoxDecoration(
             color: Color(0xFF161B22),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
           ),
           child: Icon(icon, color: Colors.grey[400], size: 20),
         ),
@@ -517,4 +504,22 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
               PopupMenuItem(value: "alttab", child: Text("Switch Window (Alt + Tab)")),
               PopupMenuItem(value: "taskmgr", child: Text("Task Manager")),
               PopupMenuDivider(),
-       
+              PopupMenuItem(value: "restart", child: Text("Restart PC", style: TextStyle(color: Colors.orange))),
+              PopupMenuItem(value: "shutdown", child: Text("Shut Down PC", style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: currentFrame == null
+                  ? Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(color: Colors.redAccent),
+                          SizedBox(height: 16),
+                          Text(statusMessage

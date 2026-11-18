@@ -170,8 +170,9 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   Uint8List? frame;
   String status = "கணினியுடன் இணைக்கிறது...";
   final _txtCtrl = TextEditingController();
+  final TransformationController _zoomCtrl = TransformationController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 2.2;
+  double _dx = 0, _dy = 0, _speed = 2.0;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
@@ -209,19 +210,48 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     }
   }
 
-  void _onMove(Offset pos) {
+  void _onMove(Offset pos, Size screenSize) {
     if (_lastPos == null) { _lastPos = pos; return; }
     double rawDx = pos.dx - _lastPos!.dx;
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    double accel = (rawDx.abs() + rawDy.abs()) > 6 ? 1.55 : 1.1;
-    _dx += rawDx * _speed * accel;
-    _dy += rawDy * _speed * accel;
+    // 1. ஜூம் அளவிற்கு ஏற்ப மவுஸ் வேகத்தைத் துல்லியமாகச் சரிசெய்தல்
+    double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
+    double accel = (rawDx.abs() + rawDy.abs()) > 7 ? 1.35 : 1.0;
+    _dx += (rawDx * _speed * accel) / currentScale;
+    _dy += (rawDy * _speed * accel) / currentScale;
 
     if (DateTime.now().difference(_lastTime).inMilliseconds >= 28 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
+    }
+
+    // 2. AnyDesk Auto-Pan: ஜூம் செய்திருக்கும்போது ஓரத்திற்கு மவுஸை நகர்த்தினால் திரை தானாக நகரும்!
+    if (currentScale > 1.05) {
+      double panX = 0, panY = 0;
+      const double edge = 55.0;
+      const double panStep = 14.0;
+
+      if (pos.dx < edge) panX = panStep;
+      else if (pos.dx > screenSize.width - edge) panX = -panStep;
+
+      if (pos.dy < edge) panY = panStep;
+      else if (pos.dy > screenSize.height - edge) panY = -panStep;
+
+      if (panX != 0 || panY != 0) {
+        final Matrix4 m = _zoomCtrl.value.clone();
+        double maxTx = 80.0;
+        double minTx = screenSize.width * (1 - currentScale) - 80.0;
+        double maxTy = 180.0;
+        double minTy = screenSize.height * (1 - currentScale) - 180.0;
+
+        double nextTx = (m.storage[12] + panX).clamp(minTx, maxTx);
+        double nextTy = (m.storage[13] + panY).clamp(minTy, maxTy);
+        m.storage[12] = nextTx;
+        m.storage[13] = nextTy;
+        _zoomCtrl.value = m;
+      }
     }
   }
 
@@ -287,7 +317,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
             _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
             _menuBtn(Icons.speed, "Speed ${_speed}x", () {
-              setState(() => _speed = _speed == 1.5 ? 2.2 : (_speed == 2.2 ? 3.2 : 1.5));
+              setState(() => _speed = _speed == 1.4 ? 2.0 : (_speed == 2.0 ? 2.8 : 1.4));
               Navigator.pop(context);
             }),
             _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {
@@ -295,12 +325,12 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
               _send({"type": _drag ? "mouse_down" : "mouse_up"});
               Navigator.pop(context);
             }),
+            _menuBtn(Icons.zoom_out_map, "Reset Zoom", () { _zoomCtrl.value = Matrix4.identity(); Navigator.pop(context); }),
             _menuBtn(Icons.hd, "HD Quality", () { _send({"type": "quality", "level": "hd"}); Navigator.pop(context); }),
             _menuBtn(Icons.flash_on, "Fast Low", () { _send({"type": "quality", "level": "low"}); Navigator.pop(context); }),
             _menuBtn(Icons.window, "Start Menu", () { _send({"type": "key", "key": "win"}); Navigator.pop(context); }),
             _menuBtn(Icons.tab, "Alt+Tab", () { _send({"type": "hotkey", "keys": ["alt", "tab"]}); Navigator.pop(context); }),
             _menuBtn(Icons.keyboard_return, "Enter", () { _send({"type": "key", "key": "enter"}); Navigator.pop(context); }),
-            _menuBtn(Icons.backspace, "Backspace", () { _send({"type": "key", "key": "backspace"}); Navigator.pop(context); }),
             _menuBtn(Icons.restart_alt, "Restart PC", () { Navigator.pop(context); _confirmRestart(); }),
             _menuBtn(Icons.power_settings_new, "Disconnect", () { Navigator.pop(context); Navigator.pop(context); }, color: Colors.redAccent),
           ],
@@ -343,7 +373,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       if (!wasSingle && _fingers >= 2) setState(() {});
                     },
                     onPointerMove: (e) {
-                      if (_fingers == 1) _onMove(e.localPosition);
+                      if (_fingers == 1) _onMove(e.localPosition, size);
                     },
                     onPointerUp: (_) {
                       bool wasMulti = _fingers >= 2;
@@ -357,6 +387,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       setState(() {});
                     },
                     child: InteractiveViewer(
+                      transformationController: _zoomCtrl,
                       panEnabled: _fingers >= 2,
                       scaleEnabled: true,
                       minScale: 1.0,
@@ -405,6 +436,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   @override
   void dispose() {
     _closedByUser = true;
+    _zoomCtrl.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     channel?.sink.close();
     super.dispose();

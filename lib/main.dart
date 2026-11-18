@@ -172,7 +172,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   final _txtCtrl = TextEditingController();
   final TransformationController _zoomCtrl = TransformationController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 1.4;
+  double _dx = 0, _dy = 0, _speed = 1.6;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
@@ -216,32 +216,39 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // 1. "சர்ரு சர்ரு" என ஓடாமல், விரல் நகரும் அளவிற்கு ஏற்ப 1:1 துல்லியமான வேகம்
+    // 1. கர்சர் மறையாமல் விரல் நுனியிலேயே துல்லியமாக நகரும் வேகம்
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    double effectiveSpeed = _speed / (currentScale > 1.2 ? (currentScale * 0.75) : 1.0);
+    double effectiveSpeed = currentScale > 1.2 ? (_speed / (currentScale * 0.65)) : _speed;
     _dx += rawDx * effectiveSpeed;
     _dy += rawDy * effectiveSpeed;
 
-    if (DateTime.now().difference(_lastTime).inMilliseconds >= 30 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
+    if (DateTime.now().difference(_lastTime).inMilliseconds >= 26 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // 2. AnyDesk Camera-Follow: ஜூம் செய்திருக்கும்போது மவுஸ் நகரும் திசையில் திரையும் சேர்ந்து ஸ்மூத்தாக நகரும்!
+    // 2. விளிம்பிற்கு (Edge) மவுஸை நகர்த்தும்போது மட்டுமே ஜூம் திரை மென்மையாக நகரும்
     if (currentScale > 1.05) {
-      final Matrix4 m = _zoomCtrl.value.clone();
-      double maxTx = 40.0;
-      double minTx = screenSize.width * (1 - currentScale) - 40.0;
-      double maxTy = 220.0;
-      double minTy = screenSize.height * (1 - currentScale) - 220.0;
+      double panX = 0, panY = 0;
+      const double edgeZone = 65.0;
 
-      // விரல் நகரும் திசைக்கு ஏற்பத் திரையை மென்மையாக நகர்த்தும் (Smooth Follow)
-      double followPanX = -rawDx * 0.65;
-      double followPanY = -rawDy * 0.65;
+      if (pos.dx < edgeZone && rawDx < 0) panX = -rawDx * 0.9;
+      else if (pos.dx > screenSize.width - edgeZone && rawDx > 0) panX = -rawDx * 0.9;
 
-      m.storage[12] = (m.storage[12] + followPanX).clamp(minTx, maxTx);
-      m.storage[13] = (m.storage[13] + followPanY).clamp(minTy, maxTy);
-      _zoomCtrl.value = m;
+      if (pos.dy < edgeZone && rawDy < 0) panY = -rawDy * 0.9;
+      else if (pos.dy > screenSize.height - edgeZone && rawDy > 0) panY = -rawDy * 0.9;
+
+      if (panX != 0 || panY != 0) {
+        final Matrix4 m = _zoomCtrl.value.clone();
+        double maxTx = 40.0;
+        double minTx = screenSize.width * (1 - currentScale) - 40.0;
+        double maxTy = 220.0;
+        double minTy = screenSize.height * (1 - currentScale) - 220.0;
+
+        m.storage[12] = (m.storage[12] + panX).clamp(minTx, maxTx);
+        m.storage[13] = (m.storage[13] + panY).clamp(minTy, maxTy);
+        _zoomCtrl.value = m;
+      }
     }
   }
 
@@ -307,7 +314,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
             _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
             _menuBtn(Icons.speed, "Speed ${_speed}x", () {
-              setState(() => _speed = _speed == 1.0 ? 1.4 : (_speed == 1.4 ? 2.0 : 1.0));
+              setState(() => _speed = _speed == 1.2 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.2));
               Navigator.pop(context);
             }),
             _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {
@@ -352,10 +359,12 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
+          // முழுத் திரையும் (கருப்புப் பகுதி உட்பட) Touchpad ஆக வேலை செய்யும்
           Positioned.fill(
             child: frame == null
                 ? Center(child: Text(status, style: TextStyle(color: Colors.white, fontSize: 16)))
                 : Listener(
+                    behavior: HitTestBehavior.opaque,
                     onPointerDown: (e) {
                       bool wasSingle = _fingers == 1;
                       _fingers++;
@@ -376,24 +385,26 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       _lastPos = null;
                       setState(() {});
                     },
-                    child: InteractiveViewer(
-                      transformationController: _zoomCtrl,
-                      panEnabled: _fingers >= 2,
-                      scaleEnabled: true,
-                      minScale: 1.0,
-                      maxScale: 6.0,
-                      boundaryMargin: EdgeInsets.all(250),
-                      child: Container(
-                        width: size.width,
-                        height: size.height,
-                        alignment: Alignment.center,
-                        child: GestureDetector(
-                          onTap: () => _send({"type": "click"}),
-                          onDoubleTap: () => _send({"type": "double_click"}),
-                          onLongPress: () {
-                            HapticFeedback.mediumImpact();
-                            _send({"type": "right_click"});
-                          },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _send({"type": "click"}),
+                      onDoubleTap: () => _send({"type": "double_click"}),
+                      onLongPress: () {
+                        HapticFeedback.mediumImpact();
+                        _send({"type": "right_click"});
+                      },
+                      child: InteractiveViewer(
+                        transformationController: _zoomCtrl,
+                        panEnabled: _fingers >= 2,
+                        scaleEnabled: true,
+                        minScale: 1.0,
+                        maxScale: 6.0,
+                        boundaryMargin: EdgeInsets.all(250),
+                        child: Container(
+                          width: size.width,
+                          height: size.height,
+                          color: Colors.transparent,
+                          alignment: Alignment.center,
                           child: Image.memory(frame!, gaplessPlayback: true, fit: BoxFit.contain, width: size.width),
                         ),
                       ),

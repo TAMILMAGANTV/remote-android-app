@@ -23,6 +23,7 @@ class _ConnectPageState extends State<ConnectPage> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _loadData();
   }
 
@@ -170,14 +171,19 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   String status = "கணினியுடன் இணைக்கிறது...";
   final _txtCtrl = TextEditingController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 1.8;
+  double _dx = 0, _dy = 0, _speed = 1.6;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
+  bool _isLandscape = true;
 
   @override
   void initState() {
     super.initState();
+    // இணைத்தவுடன் Full Screen Landscape மோடிற்கு மாறும்
+    SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
     channel = WebSocketChannel.connect(Uri.parse('$RELAY_URL/ws/client/${widget.hostId}/${widget.password}'));
     channel.stream.listen((msg) {
       final d = jsonDecode(msg);
@@ -188,12 +194,28 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     });
   }
 
+  void _toggleOrientation() {
+    setState(() => _isLandscape = !_isLandscape);
+    if (_isLandscape) {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    } else {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
+  }
+
+  // வெண்ணெய் போல ஸ்மூத்தான மவுஸ் நகர்வு (16ms = 60Hz Ultra Smooth)
   void _onMove(Offset pos) {
     if (_lastPos == null) { _lastPos = pos; return; }
-    _dx += (pos.dx - _lastPos!.dx) * _speed;
-    _dy += (pos.dy - _lastPos!.dy) * _speed;
+    double rawDx = pos.dx - _lastPos!.dx;
+    double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
-    if (DateTime.now().difference(_lastTime).inMilliseconds >= 25 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
+
+    // மெதுவாக நகர்த்தினால் துல்லியமாகவும், வேகமாக நகர்த்தினால் தூரமாகவும் செல்லும் Acceleration
+    double accel = (rawDx.abs() + rawDy.abs()) > 8 ? 1.35 : 1.0;
+    _dx += rawDx * _speed * accel;
+    _dy += rawDy * _speed * accel;
+
+    if (DateTime.now().difference(_lastTime).inMilliseconds >= 16 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       channel.sink.add(jsonEncode({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()}));
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
@@ -210,8 +232,8 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   }
 
   void _toggleSpeed() {
-    setState(() => _speed = _speed == 1.2 ? 1.8 : (_speed == 1.8 ? 2.6 : 1.2));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Speed: ${_speed}x"), duration: Duration(milliseconds: 500)));
+    setState(() => _speed = _speed == 1.0 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.0));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Mouse Speed: ${_speed}x"), duration: Duration(milliseconds: 500)));
   }
 
   void _showKeyboard() {
@@ -231,84 +253,112 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Color(0xFF161B22),
-        title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 15)),
-        actions: [
-          IconButton(icon: Icon(Icons.speed), onPressed: _toggleSpeed),
-          IconButton(icon: Icon(Icons.content_paste), onPressed: _pasteClipboard),
-          IconButton(icon: Icon(Icons.keyboard), onPressed: _showKeyboard),
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              if (v.startsWith("q_")) _send({"type": "quality", "level": v.substring(2)});
-              if (v == "win") _send({"type": "key", "key": "win"});
-              if (v == "tab") _send({"type": "hotkey", "keys": ["alt", "tab"]});
-              if (v == "rst") _send({"type": "power", "mode": "restart"});
-              if (v == "off") _send({"type": "power", "mode": "shutdown"});
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: "q_low", child: Text("Quality: Low")),
-              PopupMenuItem(value: "q_medium", child: Text("Quality: Medium")),
-              PopupMenuItem(value: "q_hd", child: Text("Quality: HD")),
-              PopupMenuItem(value: "win", child: Text("Start Menu")),
-              PopupMenuItem(value: "tab", child: Text("Alt + Tab")),
-              PopupMenuItem(value: "rst", child: Text("Restart PC")),
-              PopupMenuItem(value: "off", child: Text("Shut Down PC")),
-            ],
-          ),
-        ],
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(44),
+        child: AppBar(
+          backgroundColor: Color(0xFF161B22),
+          title: Text("ID: ${widget.hostId}", style: TextStyle(fontSize: 14)),
+          actions: [
+            IconButton(icon: Icon(Icons.screen_rotation, size: 20), tooltip: "Rotate Screen", onPressed: _toggleOrientation),
+            IconButton(icon: Icon(Icons.speed, size: 20), tooltip: "Mouse Speed", onPressed: _toggleSpeed),
+            IconButton(icon: Icon(Icons.content_paste, size: 20), tooltip: "Paste", onPressed: _pasteClipboard),
+            IconButton(icon: Icon(Icons.keyboard, size: 20), tooltip: "Keyboard", onPressed: _showKeyboard),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, size: 20),
+              onSelected: (v) {
+                if (v.startsWith("q_")) _send({"type": "quality", "level": v.substring(2)});
+                if (v == "win") _send({"type": "key", "key": "win"});
+                if (v == "tab") _send({"type": "hotkey", "keys": ["alt", "tab"]});
+                if (v == "rst") _send({"type": "power", "mode": "restart"});
+                if (v == "off") _send({"type": "power", "mode": "shutdown"});
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(value: "q_low", child: Text("Quality: Low")),
+                PopupMenuItem(value: "q_medium", child: Text("Quality: Medium")),
+                PopupMenuItem(value: "q_hd", child: Text("Quality: HD")),
+                PopupMenuItem(value: "win", child: Text("Start Menu")),
+                PopupMenuItem(value: "tab", child: Text("Alt + Tab")),
+                PopupMenuItem(value: "rst", child: Text("Restart PC")),
+                PopupMenuItem(value: "off", child: Text("Shut Down PC")),
+              ],
+            ),
+          ],
+        ),
       ),
-      body: Column(children: [
-        Expanded(
-          child: Center(
+      body: SafeArea(
+        child: Column(children: [
+          Expanded(
             child: frame == null
-                ? Text(status, style: TextStyle(color: Colors.white, fontSize: 16))
-                : InteractiveViewer(
-                    minScale: 1.0,
-                    maxScale: 5.0,
-                    child: Listener(
-                      onPointerDown: (e) { _fingers++; if (_fingers == 1) { _lastPos = e.localPosition; _dx = 0; _dy = 0; } },
-                      onPointerMove: (e) { if (_fingers == 1) _onMove(e.localPosition); },
-                      onPointerUp: (_) { _fingers = (_fingers - 1).clamp(0, 10); if (_fingers == 0) _lastPos = null; },
-                      child: GestureDetector(
-                        onTap: () => _send({"type": "click"}),
-                        onDoubleTap: () => _send({"type": "double_click"}),
-                        onLongPress: () => _send({"type": "right_click"}),
-                        child: Image.memory(frame!, gaplessPlayback: true, fit: BoxFit.contain),
+                ? Center(child: Text(status, style: TextStyle(color: Colors.white, fontSize: 16)))
+                : Listener(
+                    onPointerDown: (e) {
+                      setState(() => _fingers++);
+                      if (_fingers == 1) { _lastPos = e.localPosition; _dx = 0; _dy = 0; }
+                    },
+                    onPointerMove: (e) {
+                      // 1 விரலால் நகர்த்தினால் ஜூம் செய்திருந்தாலும் மவுஸ் மட்டுமே நகரும்!
+                      if (_fingers == 1) _onMove(e.localPosition);
+                    },
+                    onPointerUp: (_) {
+                      setState(() => _fingers = (_fingers - 1).clamp(0, 10));
+                      if (_fingers == 0) _lastPos = null;
+                    },
+                    onPointerCancel: (_) {
+                      setState(() => _fingers = 0);
+                      _lastPos = null;
+                    },
+                    child: InteractiveViewer(
+                      // 2 விரல்கள் வைக்கும்போது மட்டுமே ஜூம் & திரை நகர்வு (Pan) வேலை செய்யும்
+                      panEnabled: _fingers >= 2,
+                      scaleEnabled: true,
+                      minScale: 1.0,
+                      maxScale: 5.0,
+                      child: SizedBox.expand(
+                        child: GestureDetector(
+                          onTap: () => _send({"type": "click"}),
+                          onDoubleTap: () => _send({"type": "double_click"}),
+                          onLongPress: () => _send({"type": "right_click"}),
+                          child: Image.memory(frame!, gaplessPlayback: true, fit: BoxFit.fill),
+                        ),
                       ),
                     ),
                   ),
           ),
-        ),
-        Container(
-          color: Color(0xFF161B22),
-          padding: EdgeInsets.all(6),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              ElevatedButton(onPressed: () => _send({"type": "click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent), child: Text("Left Click")),
-              SizedBox(width: 6),
-              ElevatedButton(onPressed: () => _send({"type": "double_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text("Double Click")),
-              SizedBox(width: 6),
-              ElevatedButton(onPressed: () => _send({"type": "right_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange), child: Text("Right Click")),
-              SizedBox(width: 6),
-              ElevatedButton(
-                onPressed: () { setState(() => _drag = !_drag); _send({"type": _drag ? "mouse_down" : "mouse_up"}); },
-                style: ElevatedButton.styleFrom(backgroundColor: _drag ? Colors.amber : Colors.grey[800]),
-                child: Text(_drag ? "Release" : "Drag Hold", style: TextStyle(color: _drag ? Colors.black : Colors.white)),
-              ),
-              IconButton(icon: Icon(Icons.arrow_upward), onPressed: () => _send({"type": "scroll", "amount": 300})),
-              IconButton(icon: Icon(Icons.arrow_downward), onPressed: () => _send({"type": "scroll", "amount": -300})),
-              ElevatedButton(onPressed: () => _send({"type": "key", "key": "enter"}), child: Text("Enter")),
-              SizedBox(width: 6),
-              ElevatedButton(onPressed: () => _send({"type": "key", "key": "backspace"}), child: Text("Backspace")),
-            ]),
+          Container(
+            color: Color(0xFF161B22),
+            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                ElevatedButton(onPressed: () => _send({"type": "click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent), child: Text("Left Click")),
+                SizedBox(width: 6),
+                ElevatedButton(onPressed: () => _send({"type": "double_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text("Double Click")),
+                SizedBox(width: 6),
+                ElevatedButton(onPressed: () => _send({"type": "right_click"}), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange), child: Text("Right Click")),
+                SizedBox(width: 6),
+                ElevatedButton(
+                  onPressed: () { setState(() => _drag = !_drag); _send({"type": _drag ? "mouse_down" : "mouse_up"}); },
+                  style: ElevatedButton.styleFrom(backgroundColor: _drag ? Colors.amber : Colors.grey[800]),
+                  child: Text(_drag ? "Release" : "Drag Hold", style: TextStyle(color: _drag ? Colors.black : Colors.white)),
+                ),
+                IconButton(icon: Icon(Icons.arrow_upward, size: 20), onPressed: () => _send({"type": "scroll", "amount": 300})),
+                IconButton(icon: Icon(Icons.arrow_downward, size: 20), onPressed: () => _send({"type": "scroll", "amount": -300})),
+                ElevatedButton(onPressed: () => _send({"type": "key", "key": "enter"}), child: Text("Enter")),
+                SizedBox(width: 6),
+                ElevatedButton(onPressed: () => _send({"type": "key", "key": "backspace"}), child: Text("Backspace")),
+              ]),
+            ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 
   @override
-  void dispose() { channel.sink.close(); super.dispose(); }
+  void dispose() {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    channel.sink.close();
+    super.dispose();
+  }
 }

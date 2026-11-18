@@ -227,7 +227,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // AnyDesk True Edge-Panning: ஜூம் செய்திருக்கும்போது மவுஸ் விளிம்பிற்குச் சென்றால் திரை தானாக பின்தொடரும்
     if (currentScale > 1.05) {
       final Matrix4 m = _zoomCtrl.value.clone();
       double tx = m.storage[12];
@@ -238,7 +237,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       double maxTy = 220.0;
       double minTy = screenSize.height * (1 - currentScale) - 220.0;
 
-      // விரல் திரையின் ஓரங்களுக்கு (Edge) செல்லும்போது திரை அந்தத் திசையில் நகரும்
       double panStep = 18.0;
       const double edgeZone = 60.0;
 
@@ -388,7 +386,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                     },
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => _send({"type": "click"}},
+                      onTap: () => _send({"type": "click"}),
                       onDoubleTap: () => _send({"type": "double_click"}),
                       onLongPress: () {
                         HapticFeedback.mediumImpact();
@@ -443,5 +441,4 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     channel?.sink.close();
     super.dispose();
   }
-          }
-          
+}

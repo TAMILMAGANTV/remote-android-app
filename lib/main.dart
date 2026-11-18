@@ -172,7 +172,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
   final _txtCtrl = TextEditingController();
   final TransformationController _zoomCtrl = TransformationController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 1.6;
+  double _dx = 0, _dy = 0, _speed = 1.5;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
@@ -216,29 +216,34 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
+    // மவுஸ் மிகவும் துல்லியமாகவும் நிலையாகவும் (Stable) இருக்க சிறிய நடுக்கங்களைத் தவிர்க்கிறோம்
+    if (rawDx.abs() < 0.4) rawDx = 0;
+    if (rawDy.abs() < 0.4) rawDy = 0;
+
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    double effectiveSpeed = currentScale > 1.1 ? (_speed / (currentScale * 0.75)) : _speed;
+    double effectiveSpeed = currentScale > 1.1 ? (_speed / (currentScale * 0.7)) : _speed;
     
     _dx += rawDx * effectiveSpeed;
     _dy += rawDy * effectiveSpeed;
 
-    if (DateTime.now().difference(_lastTime).inMilliseconds >= 26 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
+    if (DateTime.now().difference(_lastTime).inMilliseconds >= 25 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
       _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
+    // AnyDesk Style Auto-Scroll (மவுஸ் விளிம்பிற்குச் செல்லும்போது திரை பின்தொடர்ந்து நகரும்)
     if (currentScale > 1.05) {
       final Matrix4 m = _zoomCtrl.value.clone();
       double tx = m.storage[12];
       double ty = m.storage[13];
 
-      double maxTx = 40.0;
-      double minTx = screenSize.width * (1 - currentScale) - 40.0;
-      double maxTy = 220.0;
-      double minTy = screenSize.height * (1 - currentScale) - 220.0;
+      double maxTx = 20.0;
+      double minTx = screenSize.width * (1 - currentScale) - 20.0;
+      double maxTy = 150.0;
+      double minTy = screenSize.height * (1 - currentScale) - 150.0;
 
-      double panStep = 18.0;
-      const double edgeZone = 60.0;
+      double panStep = 16.0;
+      const double edgeZone = 75.0;
 
       if (pos.dx < edgeZone) tx += panStep;
       else if (pos.dx > screenSize.width - edgeZone) tx -= panStep;
@@ -314,7 +319,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
             _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
             _menuBtn(Icons.speed, "Speed ${_speed}x", () {
-              setState(() => _speed = _speed == 1.2 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.2));
+              setState(() => _speed = _speed == 1.2 ? 1.5 : (_speed == 1.5 ? 2.2 : 1.2));
               Navigator.pop(context);
             }),
             _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {

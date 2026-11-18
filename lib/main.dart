@@ -82,7 +82,6 @@ class _ConnectPageState extends State<ConnectPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Brand Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -103,7 +102,7 @@ class _ConnectPageState extends State<ConnectPage> {
                             ),
                           ],
                         ),
-                        child: Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 28),
+                        child: Icon(Icons.desktop_windows, color: Colors.white, size: 28),
                       ),
                       SizedBox(width: 12),
                       Column(
@@ -141,7 +140,6 @@ class _ConnectPageState extends State<ConnectPage> {
 
               SizedBox(height: 28),
 
-              // Main Connection Card
               Container(
                 padding: EdgeInsets.all(22),
                 decoration: BoxDecoration(
@@ -170,7 +168,6 @@ class _ConnectPageState extends State<ConnectPage> {
                     ),
                     SizedBox(height: 22),
 
-                    // PC ID Field
                     TextField(
                       controller: _idController,
                       keyboardType: TextInputType.number,
@@ -178,7 +175,7 @@ class _ConnectPageState extends State<ConnectPage> {
                       decoration: InputDecoration(
                         labelText: "Remote Desk ID",
                         hintText: "123 456 789",
-                        prefixIcon: Icon(Icons.computer_rounded, color: Colors.redAccent),
+                        prefixIcon: Icon(Icons.computer, color: Colors.redAccent),
                         suffixIcon: _idController.text.isNotEmpty
                             ? IconButton(
                                 icon: Icon(Icons.clear, size: 18, color: Colors.grey),
@@ -199,14 +196,13 @@ class _ConnectPageState extends State<ConnectPage> {
                     ),
                     SizedBox(height: 16),
 
-                    // Password Field
                     TextField(
                       controller: _passController,
                       obscureText: _obscurePassword,
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         labelText: "Password (கடவுச்சொல்)",
-                        prefixIcon: Icon(Icons.lock_outline_rounded, color: Colors.redAccent),
+                        prefixIcon: Icon(Icons.lock_outline, color: Colors.redAccent),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -228,7 +224,6 @@ class _ConnectPageState extends State<ConnectPage> {
                     ),
                     SizedBox(height: 24),
 
-                    // Connect Button
                     Container(
                       width: double.infinity,
                       height: 54,
@@ -247,7 +242,7 @@ class _ConnectPageState extends State<ConnectPage> {
                       ),
                       child: ElevatedButton.icon(
                         onPressed: _connect,
-                        icon: Icon(Icons.arrow_forward_rounded, color: Colors.white),
+                        icon: Icon(Icons.arrow_forward, color: Colors.white),
                         label: Text(
                           "Connect Now",
                           style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
@@ -265,7 +260,6 @@ class _ConnectPageState extends State<ConnectPage> {
 
               SizedBox(height: 26),
 
-              // Quick Connect Saved Device Section
               if (_lastConnectedId.isNotEmpty) ...[
                 Text(
                   "Saved Workstation (சேமிக்கப்பட்ட கணினி)",
@@ -290,7 +284,7 @@ class _ConnectPageState extends State<ConnectPage> {
                             color: Colors.blueAccent.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(Icons.laptop_windows_rounded, color: Colors.blueAccent, size: 26),
+                          child: Icon(Icons.laptop, color: Colors.blueAccent, size: 26),
                         ),
                         SizedBox(width: 14),
                         Expanded(
@@ -309,7 +303,7 @@ class _ConnectPageState extends State<ConnectPage> {
                             ],
                           ),
                         ),
-                        Icon(Icons.play_circle_fill_rounded, color: Colors.greenAccent, size: 34),
+                        Icon(Icons.play_circle_fill, color: Colors.greenAccent, size: 34),
                       ],
                     ),
                   ),
@@ -317,13 +311,12 @@ class _ConnectPageState extends State<ConnectPage> {
                 SizedBox(height: 22),
               ],
 
-              // Feature Highlights Footer
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildFeatureBadge(Icons.touch_app_rounded, "Smooth Touch"),
-                  _buildFeatureBadge(Icons.hd_rounded, "HD Stream"),
-                  _buildFeatureBadge(Icons.shield_rounded, "Auto-Saved"),
+                  _buildFeatureBadge(Icons.touch_app, "Smooth Touch"),
+                  _buildFeatureBadge(Icons.hd, "HD Stream"),
+                  _buildFeatureBadge(Icons.security, "Auto-Saved"),
                 ],
               ),
             ],
@@ -520,4 +513,13 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
           IconButton(icon: Icon(Icons.speed), tooltip: "Mouse Speed", onPressed: _cycleSensitivity),
           IconButton(icon: Icon(Icons.content_paste), tooltip: "Paste Text", onPressed: _pasteFromPhoneClipboard),
           IconButton(icon: Icon(Icons.keyboard), tooltip: "Keyboard", onPressed: _showKeyboardDialog),
-          Popup
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert),
+            onSelected: (val) {
+              if (val.startsWith("q_")) {
+                _changeQuality(val.substring(2));
+              } else if (val == "win") {
+                _sendKey("win");
+              } else if (val == "alttab") {
+                _sendHotkey(["alt", "tab"]);
+        

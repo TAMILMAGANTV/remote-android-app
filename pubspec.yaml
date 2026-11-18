@@ -1,7 +1,7 @@
 name: remote_android_app
-description: Remote Desktop Android Client
+description: Remote Desktop Android Client Pro
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   web_socket_channel: ^2.4.0
   shared_preferences: ^2.2.2
+  file_picker: ^8.0.0
 
 flutter:
   uses-material-design: true

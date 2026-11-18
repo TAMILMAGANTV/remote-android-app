@@ -210,38 +210,15 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     }
   }
 
-  // AnyDesk Magic: ஜூம் செய்தவுடன் அந்தப் பகுதியின் மையத்திற்கு மவுஸ் தானாகவே வந்துவிடும்!
-  void _syncCursorToZoomCenter(Size screenSize) {
-    final Matrix4 m = _zoomCtrl.value;
-    double scale = m.getMaxScaleOnAxis().clamp(1.0, 6.0);
-    if (scale <= 1.05) return;
-
-    double tx = m.storage[12];
-    double ty = m.storage[13];
-
-    // திரையின் மையப் புள்ளி கணினித் திரையில் எந்த இடத்தில் உள்ளது எனக் கணக்கிடுதல்
-    double canvasCenterX = (screenSize.width / 2 - tx) / scale;
-    double canvasCenterY = (screenSize.height / 2 - ty) / scale;
-
-    // 16:9 கணினித் திரைப் படத்தின் உயரம் மற்றும் மேல்/கீழ் இடைவெளி
-    double imgHeight = screenSize.width * (9.0 / 16.0);
-    double imgTop = (screenSize.height - imgHeight) / 2.0;
-
-    double normX = (canvasCenterX / screenSize.width).clamp(0.02, 0.98);
-    double normY = ((canvasCenterY - imgTop) / imgHeight).clamp(0.02, 0.98);
-
-    _send({"type": "move", "x": normX, "y": normY});
-  }
-
   void _onMove(Offset pos, Size screenSize) {
     if (_lastPos == null) { _lastPos = pos; return; }
     double rawDx = pos.dx - _lastPos!.dx;
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    // 1. மொத்தமாக ஓடாமல் விரல் நகரும் அளவிற்கு ஏற்பத் துல்லியமான மவுஸ் நகர்வு
     double currentScale = _zoomCtrl.value.getMaxScaleOnAxis().clamp(1.0, 6.0);
     double effectiveSpeed = currentScale > 1.1 ? (_speed / (currentScale * 0.75)) : _speed;
+    
     _dx += rawDx * effectiveSpeed;
     _dy += rawDy * effectiveSpeed;
 
@@ -250,28 +227,30 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
 
-    // 2. விளிம்பிற்கு (Edge) விரல் செல்லும்போது மட்டுமே திரை மென்மையாக நகரும்
+    // AnyDesk True Edge-Panning: ஜூம் செய்திருக்கும்போது மவுஸ் விளிம்பிற்குச் சென்றால் திரை தானாக பின்தொடரும்
     if (currentScale > 1.05) {
-      double panX = 0, panY = 0;
-      const double edgeZone = 55.0;
+      final Matrix4 m = _zoomCtrl.value.clone();
+      double tx = m.storage[12];
+      double ty = m.storage[13];
 
-      if (pos.dx < edgeZone && rawDx < 0) panX = -rawDx * 0.85;
-      else if (pos.dx > screenSize.width - edgeZone && rawDx > 0) panX = -rawDx * 0.85;
+      double maxTx = 40.0;
+      double minTx = screenSize.width * (1 - currentScale) - 40.0;
+      double maxTy = 220.0;
+      double minTy = screenSize.height * (1 - currentScale) - 220.0;
 
-      if (pos.dy < edgeZone && rawDy < 0) panY = -rawDy * 0.85;
-      else if (pos.dy > screenSize.height - edgeZone && rawDy > 0) panY = -rawDy * 0.85;
+      // விரல் திரையின் ஓரங்களுக்கு (Edge) செல்லும்போது திரை அந்தத் திசையில் நகரும்
+      double panStep = 18.0;
+      const double edgeZone = 60.0;
 
-      if (panX != 0 || panY != 0) {
-        final Matrix4 m = _zoomCtrl.value.clone();
-        double maxTx = 40.0;
-        double minTx = screenSize.width * (1 - currentScale) - 40.0;
-        double maxTy = 220.0;
-        double minTy = screenSize.height * (1 - currentScale) - 220.0;
+      if (pos.dx < edgeZone) tx += panStep;
+      else if (pos.dx > screenSize.width - edgeZone) tx -= panStep;
 
-        m.storage[12] = (m.storage[12] + panX).clamp(minTx, maxTx);
-        m.storage[13] = (m.storage[13] + panY).clamp(minTy, maxTy);
-        _zoomCtrl.value = m;
-      }
+      if (pos.dy < edgeZone) ty += panStep;
+      else if (pos.dy > screenSize.height - edgeZone) ty -= panStep;
+
+      m.storage[12] = tx.clamp(minTx, maxTx);
+      m.storage[13] = ty.clamp(minTy, maxTy);
+      _zoomCtrl.value = m;
     }
   }
 
@@ -400,11 +379,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                       bool wasMulti = _fingers >= 2;
                       _fingers = (_fingers - 1).clamp(0, 10);
                       if (_fingers == 0) _lastPos = null;
-                      if (wasMulti && _fingers < 2) {
-                        setState(() {});
-                        // இரண்டு விரலால் ஜூம் செய்து முடித்தவுடன், அந்த இடத்திற்கு மவுஸ் தானாக வந்துவிடும்!
-                        _syncCursorToZoomCenter(size);
-                      }
+                      if (wasMulti && _fingers < 2) setState(() {});
                     },
                     onPointerCancel: (_) {
                       _fingers = 0;
@@ -413,7 +388,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                     },
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => _send({"type": "click"}),
+                      onTap: () => _send({"type": "click"}},
                       onDoubleTap: () => _send({"type": "double_click"}),
                       onLongPress: () {
                         HapticFeedback.mediumImpact();
@@ -468,4 +443,5 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     channel?.sink.close();
     super.dispose();
   }
-}
+          }
+          

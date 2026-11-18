@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -165,29 +166,47 @@ class RemoteScreenPage extends StatefulWidget {
 }
 
 class _RemoteScreenPageState extends State<RemoteScreenPage> {
-  late WebSocketChannel channel;
+  WebSocketChannel? channel;
   Uint8List? frame;
   String status = "கணினியுடன் இணைக்கிறது...";
   final _txtCtrl = TextEditingController();
   Offset? _lastPos;
-  double _dx = 0, _dy = 0, _speed = 1.6;
+  double _dx = 0, _dy = 0, _speed = 2.2;
   DateTime _lastTime = DateTime.now();
   int _fingers = 0;
   bool _drag = false;
+  bool _closedByUser = false;
   double _fabY = 260;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    channel = WebSocketChannel.connect(Uri.parse('$RELAY_URL/ws/client/${widget.hostId}/${widget.password}'));
-    channel.stream.listen((msg) {
-      final d = jsonDecode(msg);
-      if (d['type'] == 'frame') setState(() => frame = base64Decode(d['image']));
-      if (d['type'] == 'error') setState(() => status = d['message']);
-    }, onDone: () {
-      if (mounted) setState(() => status = "இணைப்பு துண்டிக்கப்பட்டது");
-    });
+    _connectSocket();
+  }
+
+  void _connectSocket() {
+    if (_closedByUser || !mounted) return;
+    try {
+      channel = WebSocketChannel.connect(Uri.parse('$RELAY_URL/ws/client/${widget.hostId}/${widget.password}'));
+      channel!.stream.listen((msg) {
+        if (!mounted) return;
+        final d = jsonDecode(msg);
+        if (d['type'] == 'frame') setState(() => frame = base64Decode(d['image']));
+        if (d['type'] == 'error') setState(() => status = d['message']);
+      }, onDone: () {
+        if (!_closedByUser && mounted) {
+          setState(() => status = "மீண்டும் இணைக்கிறது...");
+          Future.delayed(Duration(seconds: 2), _connectSocket);
+        }
+      }, onError: (_) {
+        if (!_closedByUser && mounted) {
+          Future.delayed(Duration(seconds: 2), _connectSocket);
+        }
+      });
+    } catch (_) {
+      Future.delayed(Duration(seconds: 2), _connectSocket);
+    }
   }
 
   void _onMove(Offset pos) {
@@ -196,17 +215,19 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     double rawDy = pos.dy - _lastPos!.dy;
     _lastPos = pos;
 
-    double accel = (rawDx.abs() + rawDy.abs()) > 8 ? 1.4 : 1.0;
+    double accel = (rawDx.abs() + rawDy.abs()) > 6 ? 1.55 : 1.1;
     _dx += rawDx * _speed * accel;
     _dy += rawDy * _speed * accel;
 
-    if (DateTime.now().difference(_lastTime).inMilliseconds >= 16 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
-      channel.sink.add(jsonEncode({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()}));
+    if (DateTime.now().difference(_lastTime).inMilliseconds >= 28 && (_dx.abs() >= 1 || _dy.abs() >= 1)) {
+      _send({"type": "move_rel", "dx": _dx.round(), "dy": _dy.round()});
       _dx = 0; _dy = 0; _lastTime = DateTime.now();
     }
   }
 
-  void _send(Map<String, dynamic> data) => channel.sink.add(jsonEncode(data));
+  void _send(Map<String, dynamic> data) {
+    try { channel?.sink.add(jsonEncode(data)); } catch (_) {}
+  }
 
   Future<void> _pasteClipboard() async {
     final c = await Clipboard.getData(Clipboard.kTextPlain);
@@ -229,7 +250,28 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
     );
   }
 
-  // AnyDesk Pie Menu (மிதக்கும் பட்டனை அழுத்தினால் திறக்கும் மெனு)
+  void _confirmRestart() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text("Restart PC"),
+        content: Text("உங்கள் கம்ப்யூட்டரை Restart செய்ய வேண்டுமா?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("No")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              _send({"type": "power", "mode": "restart"});
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("PC Restarting...")));
+            },
+            child: Text("Yes", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openAnyDeskMenu() {
     showModalBottomSheet(
       context: context,
@@ -245,7 +287,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.keyboard, "Keyboard", () { Navigator.pop(context); _showKeyboard(); }),
             _menuBtn(Icons.content_paste, "Paste", () { Navigator.pop(context); _pasteClipboard(); }),
             _menuBtn(Icons.speed, "Speed ${_speed}x", () {
-              setState(() => _speed = _speed == 1.0 ? 1.6 : (_speed == 1.6 ? 2.4 : 1.0));
+              setState(() => _speed = _speed == 1.5 ? 2.2 : (_speed == 2.2 ? 3.2 : 1.5));
               Navigator.pop(context);
             }),
             _menuBtn(Icons.open_with, _drag ? "Drop Drag" : "Drag Hold", () {
@@ -259,7 +301,7 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
             _menuBtn(Icons.tab, "Alt+Tab", () { _send({"type": "hotkey", "keys": ["alt", "tab"]}); Navigator.pop(context); }),
             _menuBtn(Icons.keyboard_return, "Enter", () { _send({"type": "key", "key": "enter"}); Navigator.pop(context); }),
             _menuBtn(Icons.backspace, "Backspace", () { _send({"type": "key", "key": "backspace"}); Navigator.pop(context); }),
-            _menuBtn(Icons.restart_alt, "Restart PC", () { _send({"type": "power", "mode": "restart"}); Navigator.pop(context); }),
+            _menuBtn(Icons.restart_alt, "Restart PC", () { Navigator.pop(context); _confirmRestart(); }),
             _menuBtn(Icons.power_settings_new, "Disconnect", () { Navigator.pop(context); Navigator.pop(context); }, color: Colors.redAccent),
           ],
         ),
@@ -290,25 +332,29 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. முழுத் திரை ஜூம் மற்றும் டச்பேட் பகுதி (AnyDesk Style)
           Positioned.fill(
             child: frame == null
                 ? Center(child: Text(status, style: TextStyle(color: Colors.white, fontSize: 16)))
                 : Listener(
                     onPointerDown: (e) {
-                      setState(() => _fingers++);
+                      bool wasSingle = _fingers == 1;
+                      _fingers++;
                       if (_fingers == 1) { _lastPos = e.localPosition; _dx = 0; _dy = 0; }
+                      if (!wasSingle && _fingers >= 2) setState(() {});
                     },
                     onPointerMove: (e) {
                       if (_fingers == 1) _onMove(e.localPosition);
                     },
                     onPointerUp: (_) {
-                      setState(() => _fingers = (_fingers - 1).clamp(0, 10));
+                      bool wasMulti = _fingers >= 2;
+                      _fingers = (_fingers - 1).clamp(0, 10);
                       if (_fingers == 0) _lastPos = null;
+                      if (wasMulti && _fingers < 2) setState(() {});
                     },
                     onPointerCancel: (_) {
-                      setState(() => _fingers = 0);
+                      _fingers = 0;
                       _lastPos = null;
+                      setState(() {});
                     },
                     child: InteractiveViewer(
                       panEnabled: _fingers >= 2,
@@ -333,37 +379,6 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
                     ),
                   ),
           ),
-
-          // 2. வலது ஓரத்தில் Scroll Bar (AnyDesk போல)
-          Positioned(
-            right: 4,
-            top: size.height * 0.35,
-            bottom: size.height * 0.35,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => _send({"type": "scroll", "amount": 350}),
-                  child: Container(
-                    padding: EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.keyboard_arrow_up, color: Colors.white70, size: 22),
-                  ),
-                ),
-                SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () => _send({"type": "scroll", "amount": -350}),
-                  child: Container(
-                    padding: EdgeInsets.all(4),
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 22),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 3. இடது ஓரத்தில் மிதக்கும் AnyDesk Floating Button
           Positioned(
             left: 10,
             top: _fabY,
@@ -389,8 +404,9 @@ class _RemoteScreenPageState extends State<RemoteScreenPage> {
 
   @override
   void dispose() {
+    _closedByUser = true;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    channel.sink.close();
+    channel?.sink.close();
     super.dispose();
   }
 }
